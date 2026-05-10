@@ -16,3 +16,7 @@ class PanelStates(StatesGroup):
     waiting_wl_remove = State()
     waiting_reject_reason = State()
     waiting_broadcast_text = State()
+
+
+class RulesStates(StatesGroup):
+    reading = State()

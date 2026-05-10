@@ -97,6 +97,17 @@ def admin_keyboard(user_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def rules_keyboard(page: int, total: int) -> InlineKeyboardMarkup:
+    row = []
+    if page > 0:
+        row.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"rules_{page - 1}"))
+    if page < total - 1:
+        row.append(InlineKeyboardButton(text="Далее ▶️", callback_data=f"rules_{page + 1}"))
+    else:
+        row.append(InlineKeyboardButton(text="📋 Заполнить анкету", callback_data="rules_done"))
+    return InlineKeyboardMarkup(inline_keyboard=[row])
+
+
 def confirm_restart_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

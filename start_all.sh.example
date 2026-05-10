@@ -79,11 +79,11 @@ while true; do
     # включаем запись обратно
     rcon save-on
 
-    # удаляем старые бэкапы, оставляем 25
-    ls -t "$BACKUP_ROOT"/*.tar.gz 2>/dev/null | tail -n +26 | xargs -I {} rm -f "{}"
+    # удаляем старые бэкапы, оставляем 15
+    ls -t "$BACKUP_ROOT"/*.tar.gz 2>/dev/null | tail -n +16 | xargs -I {} rm -f "{}"
 
     echo "[$TIMESTAMP] бэкап сохранён: $BACKUP_FILE"
-    sleep 1200
+    sleep 2400
 done
 ) &
 

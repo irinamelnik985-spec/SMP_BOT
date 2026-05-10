@@ -6,16 +6,11 @@ from aiogram.types import CallbackQuery, Message
 import db
 import storage
 from config import ADMIN_ID
-from keyboards import confirm_restart_keyboard, main_keyboard, start_form_keyboard
+from handlers.rules import RULES_PAGES, TOTAL, WARNING_TEXT, _page_header
+from keyboards import confirm_restart_keyboard, main_keyboard, rules_keyboard, start_form_keyboard
+from states import RulesStates
 
 router = Router()
-
-WARNING_TEXT = (
-    "⚠️ Внимание!\n\n"
-    "Если тебе меньше 14 лет — ты не будешь допущен(а) на сервер.\n"
-    "Если возраст окажется ложью — ты также потеряешь доступ навсегда.\n\n"
-    "Готов(а)? Нажми кнопку ниже 👇"
-)
 
 
 @router.message(CommandStart())
@@ -40,7 +35,13 @@ async def apply_whitelist(message: Message, state: FSMContext) -> None:
         )
         return
 
-    await message.answer(WARNING_TEXT, reply_markup=start_form_keyboard())
+    await state.set_state(RulesStates.reading)
+    await state.update_data(page=0)
+    await message.answer(
+        _page_header(0) + RULES_PAGES[0],
+        reply_markup=rules_keyboard(0, TOTAL),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(F.data == "confirm_restart")
@@ -48,7 +49,13 @@ async def confirm_restart(callback: CallbackQuery, state: FSMContext) -> None:
     user_id = callback.from_user.id
     storage.submitted_users.discard(user_id)
     storage.pending_applications.pop(user_id, None)
-    await callback.message.edit_text(WARNING_TEXT, reply_markup=start_form_keyboard())
+    await state.set_state(RulesStates.reading)
+    await state.update_data(page=0)
+    await callback.message.edit_text(
+        _page_header(0) + RULES_PAGES[0],
+        reply_markup=rules_keyboard(0, TOTAL),
+        parse_mode="HTML",
+    )
     await callback.answer()
 
 
