@@ -1,0 +1,18 @@
+# Secrets
+.env
+
+# Database
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Claude
+.claude/
+
+# Logs
+*.log
