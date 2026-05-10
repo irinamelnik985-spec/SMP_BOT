@@ -1,6 +1,5 @@
 # Secrets
 .env
-start_all.sh
 
 # Database
 *.db

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # ===================== НАСТРОЙКИ =====================
-SERVER_DIR="/home/danya/minecraft"
-BACKUP_ROOT="/home/danya/minecraft/minecraft_backups"
+SERVER_DIR="/path/to/minecraft"
+BACKUP_ROOT="/path/to/minecraft/minecraft_backups"
 JAR_NAME="server.jar"
 RAM_MIN="4G"
 RAM_MAX="4G"
 RCON_PORT=25575
-RCON_PASS="werty3108"
+RCON_PASS="your_rcon_password"
 LOG_FILE="$SERVER_DIR/server_errors.log"
 BOT_DIR="$SERVER_DIR/whitelist-bot"
 # =====================================================
@@ -20,13 +20,13 @@ echo "старые процессы бэкапа убиты (если были)"
 echo "madvise" | sudo tee /sys/kernel/mm/transparent_hugepage/enabled > /dev/null 2>&1
 
 # снижаем агрессивность свопа
-echo '2323' | sudo -S sysctl -q vm.swappiness=10
+sudo sysctl -q vm.swappiness=10
 
 # уменьшаем I/O спайки при записи чанков
-echo '2323' | sudo -S sysctl -q vm.dirty_ratio=10
-echo '2323' | sudo -S sysctl -q vm.dirty_background_ratio=5
+sudo sysctl -q vm.dirty_ratio=10
+sudo sysctl -q vm.dirty_background_ratio=5
 
-# фиксируем частоту CPU на максимуме
+# фиксируем частоту CPU на максимуме (подставь нужное значение в кГц)
 for cpu in /sys/devices/system/cpu/cpu*/cpufreq/; do
     echo 2100000 | sudo tee "${cpu}scaling_max_freq" > /dev/null 2>&1
     echo 2100000 | sudo tee "${cpu}scaling_min_freq" > /dev/null 2>&1
@@ -55,15 +55,12 @@ rcon() {
     rconclt -c "$RCON_CONFIG" minecraft "$@" 2>/dev/null
 }
 
+# пробивка портов через UPnP (подставь свои локальные IP-адреса)
 echo "пробиваем порты..."
-upnpc -e "sshd"      -a 192.168.0.102 22    22    tcp
-upnpc -u http://192.168.1.1:1900/gatedesc.xml -e "sshd"      -a 192.168.1.76  22    22    tcp
-upnpc -e "minet"     -a 192.168.0.102 25565 25565 tcp
-upnpc -u http://192.168.1.1:1900/gatedesc.xml -e "minet"     -a 192.168.1.76  25565 25565 tcp
-upnpc -e "pl3xmap"   -a 192.168.0.102 8080  8080  tcp
-upnpc -u http://192.168.1.1:1900/gatedesc.xml -e "pl3xmap"   -a 192.168.1.76  8080  8080  tcp
-upnpc -e "voicechat" -a 192.168.0.102 24454 24454 udp
-upnpc -u http://192.168.1.1:1900/gatedesc.xml -e "voicechat" -a 192.168.1.76  24454 24454 udp
+upnpc -e "sshd"      -a 192.168.x.x 22    22    tcp
+upnpc -e "minet"     -a 192.168.x.x 25565 25565 tcp
+upnpc -e "pl3xmap"   -a 192.168.x.x 8080  8080  tcp
+upnpc -e "voicechat" -a 192.168.x.x 24454 24454 udp
 
 # бэкап-система
 mkdir -p "$BACKUP_ROOT"
@@ -98,10 +95,10 @@ echo "запускаем tor..."
 sudo systemctl start tor
 sleep 2
 
-source /home/danya/minecraft/venv/bin/activate
+source /path/to/venv/bin/activate
 
 echo "перезапускаем телеграм-бот через systemd..."
-echo '2323' | sudo -S systemctl restart whitelist-bot.service
+sudo systemctl restart whitelist-bot.service
 echo "бот запущен"
 
 echo "запускаем сервер..."
