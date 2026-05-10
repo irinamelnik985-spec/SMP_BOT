@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import db
 import storage
 from config import BOT_TOKEN, PROXY_URL
-from handlers import admin, form, panel, rules, start
+from handlers import admin, form, panel, rules, start, ticket
 from monitor import log_watcher_loop, monitoring_loop
 
 logging.basicConfig(
@@ -35,6 +35,7 @@ async def main() -> None:
     dp.include_router(start.router)
     dp.include_router(rules.router)
     dp.include_router(form.router)
+    dp.include_router(ticket.router)
     dp.include_router(admin.router)
     dp.include_router(panel.router)
 

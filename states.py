@@ -20,3 +20,13 @@ class PanelStates(StatesGroup):
 
 class RulesStates(StatesGroup):
     reading = State()
+
+
+class TicketStates(StatesGroup):
+    choosing_type = State()
+    waiting_offender = State()
+    waiting_complaint_text = State()
+    waiting_complaint_photo = State()
+    waiting_question_text = State()
+    waiting_question_photo = State()
+    waiting_reply_text = State()

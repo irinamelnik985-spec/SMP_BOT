@@ -12,3 +12,6 @@ rejected_users: dict[int, float] = {}
 
 # все пользователи, когда-либо запустившие бота (для рассылки)
 all_users: set[int] = set()
+
+# user_id -> данные тикета (жалоба/вопрос)
+pending_tickets: dict[int, dict] = {}
