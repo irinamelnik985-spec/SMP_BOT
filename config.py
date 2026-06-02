@@ -12,6 +12,8 @@ RCON_PASS: str = os.getenv("RCON_PASS", "")
 PROXY_URL: str = os.getenv("PROXY_URL", "")
 MC_LOG_PATH: str = os.getenv("MC_LOG_PATH", "/home/danya/minecraft/logs/latest.log")
 BACKUP_ROOT: str = os.getenv("BACKUP_ROOT", "/home/danya/minecraft/minecraft_backups")
+REVIEWS_GROUP_ID: int = int(os.getenv("REVIEWS_GROUP_ID", "0"))
+CHATIK_TOPIC_ID: int = int(os.getenv("CHATIK_TOPIC_ID", "0"))
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не задан в .env файле")

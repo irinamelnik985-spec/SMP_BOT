@@ -7,11 +7,7 @@ from aiogram.types import (
 
 
 def main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
-    buttons = [
-        [KeyboardButton(text="📋 Подать заявку на вайтлист")],
-        [KeyboardButton(text="📢 Жалоба / Вопрос")],
-        [KeyboardButton(text="⭐ Оставить отзыв"), KeyboardButton(text="📖 Отзывы")],
-    ]
+    buttons = [[KeyboardButton(text="📋 Подать заявку на вайтлист")]]
     if is_admin:
         buttons.append([KeyboardButton(text="🎛 Админ-панель")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -112,57 +108,6 @@ def rules_keyboard(page: int, total: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[row])
 
 
-def ticket_cancel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Отменить обращение", callback_data="ticket_cancel")]]
-    )
-
-
-def ticket_photo_skip_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Пропустить ➡️", callback_data="ticket_photo_skip")],
-            [InlineKeyboardButton(text="❌ Отменить обращение", callback_data="ticket_cancel")],
-        ]
-    )
-
-
-def ticket_photos_done_keyboard(count: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=f"✅ Отправить ({count}/6)", callback_data="ticket_photos_done")],
-            [InlineKeyboardButton(text="❌ Отменить обращение", callback_data="ticket_cancel")],
-        ]
-    )
-
-
-def ticket_type_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🚨 Жалоба на игрока", callback_data="ticket_complaint")],
-            [InlineKeyboardButton(text="❓ Вопрос администратору", callback_data="ticket_question")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="ticket_cancel")],
-        ]
-    )
-
-
-def ticket_admin_keyboard(user_id: int, ticket_type: str) -> InlineKeyboardMarkup:
-    if ticket_type == "complaint":
-        rows = [
-            [
-                InlineKeyboardButton(text="✅ Принято", callback_data=f"ticket_ack_{user_id}"),
-                InlineKeyboardButton(text="💬 Ответить", callback_data=f"ticket_reply_{user_id}"),
-            ],
-            [InlineKeyboardButton(text="❌ Отклонить", callback_data=f"ticket_decline_{user_id}")],
-        ]
-    else:
-        rows = [[
-            InlineKeyboardButton(text="💬 Ответить", callback_data=f"ticket_reply_{user_id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"ticket_decline_{user_id}"),
-        ]]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
 def confirm_restart_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -176,36 +121,3 @@ def confirm_restart_keyboard() -> InlineKeyboardMarkup:
             ]
         ]
     )
-
-def review_rating_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="⭐", callback_data="review_rate_1"),
-            InlineKeyboardButton(text="⭐⭐", callback_data="review_rate_2"),
-            InlineKeyboardButton(text="⭐⭐⭐", callback_data="review_rate_3"),
-        ],
-        [
-            InlineKeyboardButton(text="⭐⭐⭐⭐", callback_data="review_rate_4"),
-            InlineKeyboardButton(text="⭐⭐⭐⭐⭐", callback_data="review_rate_5"),
-        ],
-        [InlineKeyboardButton(text="❌ Отменить", callback_data="review_cancel")],
-    ])
-
-
-def review_cancel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="❌ Отменить", callback_data="review_cancel")
-    ]])
-
-
-def review_edit_keyboard(review_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"review_edit_{review_id}"),
-    ]])
-
-
-def review_admin_keyboard(review_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💬 Ответить", callback_data=f"review_reply_{review_id}"),
-    ]])
-

@@ -9,13 +9,23 @@ import time
 import psutil
 from aiogram import Bot
 
-from config import ADMIN_ID, MC_LOG_PATH, RCON_HOST, RCON_PASS, RCON_PORT
+from config import ADMIN_ID, RCON_HOST, RCON_PASS, RCON_PORT
 from rcon import rcon as rcon_cmd
 
 logger = logging.getLogger(__name__)
 
 _server_was_up: bool | None = None  # None = состояние ещё не определено
 CHECK_INTERVAL = 30  # секунд
+
+ALERT_CFG = {
+    "cpu_temp": {"fire": 80.0, "reset": 73.0, "label": "🌡 CPU перегрев", "unit": "°C"},
+    "cpu_load": {"fire": 90.0, "reset": 70.0, "label": "🖥 CPU загружен",  "unit": "%"},
+    "ram":      {"fire": 90.0, "reset": 80.0, "label": "💾 RAM забита",   "unit": "%"},
+    "disk":     {"fire": 90.0, "reset": 85.0, "label": "💿 Диск забит",   "unit": "%"},
+}
+CPU_LOAD_STREAK = 3
+_alert_fired: dict[str, bool] = {k: False for k in ALERT_CFG}
+_cpu_streak = 0
 
 
 async def _rcon_ping() -> bool:
@@ -99,6 +109,18 @@ def _get_cpu_freq() -> str:
     return "—"
 
 
+def _get_cpu_temp() -> float | None:
+    try:
+        temps = psutil.sensors_temperatures()
+    except Exception:
+        return None
+    for entry in temps.get("coretemp", []):
+        if entry.label and "Package" in entry.label:
+            return float(entry.current)
+    vals = [e.current for entries in temps.values() for e in entries if e.current]
+    return max(vals) if vals else None
+
+
 def _parse_tps(raw: str) -> str:
     clean = re.sub(r"§.", "", raw)
     after_colon = re.search(r":\s*(.+)$", clean.strip())
@@ -166,42 +188,51 @@ async def get_system_status() -> str:
     return await loop.run_in_executor(None, _system_status_sync, mc_up, tps_str)
 
 
-async def log_watcher_loop(bot: Bot) -> None:
-    pos = 0
 
-    while not os.path.exists(MC_LOG_PATH):
-        await asyncio.sleep(5)
 
-    with open(MC_LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
-        f.seek(0, 2)
-        pos = f.tell()
+async def _check_alerts(bot: Bot) -> None:
+    global _cpu_streak
 
-    while True:
-        try:
-            size = os.path.getsize(MC_LOG_PATH)
-            if size < pos:
-                pos = 0
+    samples = {
+        "cpu_temp": _get_cpu_temp(),
+        "cpu_load": psutil.cpu_percent(interval=None),
+        "ram":      psutil.virtual_memory().percent,
+        "disk":     psutil.disk_usage("/").percent,
+    }
 
-            with open(MC_LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
-                f.seek(pos)
-                lines = f.readlines()
-                pos = f.tell()
+    cpu_val = samples["cpu_load"]
+    if cpu_val is not None and cpu_val >= ALERT_CFG["cpu_load"]["fire"]:
+        _cpu_streak += 1
+    else:
+        _cpu_streak = 0
 
-            for line in lines:
-                m = re.search(r"\[Server thread/INFO\]: (\w+)\[/[^\]]+\] logged in", line)
-                if m:
-                    await bot.send_message(ADMIN_ID, f"👋 <b>{m.group(1)}</b> зашёл на сервер", parse_mode="HTML")
-                    continue
-                m = re.search(r"\[Server thread/INFO\]: (\w+) lost connection:", line)
-                if m:
-                    await bot.send_message(ADMIN_ID, f"🚪 <b>{m.group(1)}</b> вышел с сервера", parse_mode="HTML")
+    for key, val in samples.items():
+        if val is None:
+            continue
+        cfg = ALERT_CFG[key]
+        fired = _alert_fired[key]
 
-        except FileNotFoundError:
-            pos = 0
-        except Exception:
-            logger.exception("Ошибка в log_watcher_loop")
-
-        await asyncio.sleep(2)
+        if not fired:
+            trigger = _cpu_streak >= CPU_LOAD_STREAK if key == "cpu_load" else val >= cfg["fire"]
+            if trigger:
+                _alert_fired[key] = True
+                await bot.send_message(
+                    ADMIN_ID,
+                    f"⚠️ <b>{cfg['label']}</b>\n"
+                    f"Текущее: <b>{val:.1f}{cfg['unit']}</b> (порог {cfg['fire']:.0f}{cfg['unit']})",
+                    parse_mode="HTML",
+                )
+                logger.warning("Алерт: %s = %.1f", key, val)
+        else:
+            if val < cfg["reset"]:
+                _alert_fired[key] = False
+                await bot.send_message(
+                    ADMIN_ID,
+                    f"✅ <b>{cfg['label']} — норма</b>\n"
+                    f"Текущее: <b>{val:.1f}{cfg['unit']}</b>",
+                    parse_mode="HTML",
+                )
+                logger.info("Алерт снят: %s = %.1f", key, val)
 
 
 async def monitoring_loop(bot: Bot) -> None:
@@ -221,7 +252,7 @@ async def monitoring_loop(bot: Bot) -> None:
             elif _server_was_up and not is_up:
                 _server_was_up = False
                 logger.warning("Сервер упал — определяем причину")
-                reason = await loop.run_in_executor(None, _detect_crash_reason)
+                reason = await asyncio.get_event_loop().run_in_executor(None, _detect_crash_reason)
                 await bot.send_message(
                     ADMIN_ID,
                     f"🚨 <b>Сервер упал!</b>\n\n<b>Возможные причины:</b>\n{reason}",
@@ -236,6 +267,8 @@ async def monitoring_loop(bot: Bot) -> None:
                     "✅ <b>Сервер снова онлайн!</b>",
                     parse_mode="HTML",
                 )
+
+            await _check_alerts(bot)
 
         except Exception:
             logger.exception("Ошибка в цикле мониторинга")
