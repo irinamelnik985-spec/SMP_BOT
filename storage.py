@@ -15,3 +15,10 @@ all_users: set[int] = set()
 
 # user_id -> данные тикета (жалоба/вопрос)
 pending_tickets: dict[int, dict] = {}
+
+# user_id заявителя -> список (admin_chat_id, message_id) разосланных копий заявки.
+# Нужно чтобы стереть инлайн-кнопки у ВСЕХ админов, когда заявку обработал один.
+app_admin_msgs: dict[int, list[tuple[int, int]]] = {}
+
+# user_id отправителя тикета -> список (admin_chat_id, message_id) копий жалобы/вопроса.
+ticket_admin_msgs: dict[int, list[tuple[int, int]]] = {}

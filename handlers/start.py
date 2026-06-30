@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 import db
 import storage
-from config import ADMIN_ID
+from config import is_admin
 from handlers.rules import RULES_PAGES, TOTAL, WARNING_TEXT, _page_header
 from keyboards import confirm_restart_keyboard, main_keyboard, rules_keyboard, start_form_keyboard
 from states import RulesStates
@@ -18,11 +18,11 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     storage.all_users.add(message.from_user.id)
     db.add_user(message.from_user.id)
-    is_admin = message.from_user.id == ADMIN_ID
+    admin_user = is_admin(message.from_user.id)
     await message.answer(
         "Привет! Это бот вайтлиста Warden SMP.\n"
         "Нажми кнопку ниже, чтобы подать заявку.",
-        reply_markup=main_keyboard(is_admin=is_admin),
+        reply_markup=main_keyboard(is_admin=admin_user),
     )
 
 

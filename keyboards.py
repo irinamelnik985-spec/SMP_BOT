@@ -17,26 +17,21 @@ def main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
-def admin_panel_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="👥 Игроки"), KeyboardButton(text="🖥 Сервер")],
-            [KeyboardButton(text="📢 Рассылка")],
-            [KeyboardButton(text="◀ Назад")],
-        ],
-        resize_keyboard=True,
-    )
+def admin_panel_keyboard(is_owner: bool = False) -> ReplyKeyboardMarkup:
+    rows = [[KeyboardButton(text="👥 Игроки"), KeyboardButton(text="🖥 Сервер")]]
+    if is_owner:
+        rows.append([KeyboardButton(text="📢 Рассылка")])  # только главный
+    rows.append([KeyboardButton(text="◀ Назад")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
-def admin_players_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="👥 Онлайн"), KeyboardButton(text="📋 Вайтлист")],
-            [KeyboardButton(text="➕ Добавить в вайтлист"), KeyboardButton(text="➖ Убрать из вайтлиста")],
-            [KeyboardButton(text="🔙 В панель")],
-        ],
-        resize_keyboard=True,
-    )
+def admin_players_keyboard(is_owner: bool = False) -> ReplyKeyboardMarkup:
+    rows = [[KeyboardButton(text="👥 Онлайн")]]
+    if is_owner:  # управление вайтлистом — только главный
+        rows[0].append(KeyboardButton(text="📋 Вайтлист"))
+        rows.append([KeyboardButton(text="➕ Добавить в вайтлист"), KeyboardButton(text="➖ Убрать из вайтлиста")])
+    rows.append([KeyboardButton(text="🔙 В панель")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 def admin_server_keyboard() -> ReplyKeyboardMarkup:

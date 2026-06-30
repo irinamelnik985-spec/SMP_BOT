@@ -7,7 +7,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 import storage
-from config import ADMIN_ID, RCON_HOST, RCON_PASS, RCON_PORT
+from config import RCON_HOST, RCON_PASS, RCON_PORT, is_admin
+from notify import close_admin_broadcast
 from rcon import rcon as rcon_cmd
 from states import PanelStates
 
@@ -27,7 +28,7 @@ async def _is_whitelisted(nickname: str) -> bool:
 
 @router.callback_query(F.data.startswith("approve_"))
 async def approve_application(callback: CallbackQuery, bot: Bot) -> None:
-    if callback.from_user.id != ADMIN_ID:
+    if not is_admin(callback.from_user.id):
         await callback.answer("У тебя нет прав для этого действия.", show_alert=True)
         return
 
@@ -66,6 +67,8 @@ async def approve_application(callback: CallbackQuery, bot: Bot) -> None:
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(admin_text)
     await callback.answer("Заявка одобрена!")
+    records = storage.app_admin_msgs.pop(user_id, [])
+    await close_admin_broadcast(bot, records, callback.from_user, f"принял заявку игрока {nickname} (uid {user_id})")
     logger.info(
         "Заявка пользователя %d одобрена администратором %d",
         user_id,
@@ -74,8 +77,8 @@ async def approve_application(callback: CallbackQuery, bot: Bot) -> None:
 
 
 @router.callback_query(F.data.startswith("reject_"))
-async def reject_application(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.from_user.id != ADMIN_ID:
+async def reject_application(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    if not is_admin(callback.from_user.id):
         await callback.answer("У тебя нет прав для этого действия.", show_alert=True)
         return
 
@@ -88,11 +91,14 @@ async def reject_application(callback: CallbackQuery, state: FSMContext) -> None
         parse_mode="HTML",
     )
     await callback.answer()
+    # клейм: гасим кнопки у всех + оповещаем, что этот админ взялся отклонять
+    records = storage.app_admin_msgs.pop(user_id, [])
+    await close_admin_broadcast(bot, records, callback.from_user, f"отклоняет заявку игрока (uid {user_id})")
 
 
 @router.message(PanelStates.waiting_reject_reason)
 async def reject_with_reason(message: Message, state: FSMContext, bot: Bot) -> None:
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
 
     data = await state.get_data()
@@ -116,4 +122,5 @@ async def reject_with_reason(message: Message, state: FSMContext, bot: Bot) -> N
 
     await state.clear()
     await message.answer(f"❌ Заявка пользователя {user_id} отклонена.\nПричина: {reason}")
+    await close_admin_broadcast(bot, [], message.from_user, f"отклонил заявку (uid {user_id}). Причина: {reason}")
     logger.info("Заявка пользователя %d отклонена, причина: %s", user_id, reason)

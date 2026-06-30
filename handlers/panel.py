@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 import storage
-from config import ADMIN_ID, BACKUP_ROOT, RCON_HOST, RCON_PASS, RCON_PORT
+from config import BACKUP_ROOT, RCON_HOST, RCON_PASS, RCON_PORT, is_admin, is_owner
 from keyboards import (
     admin_panel_keyboard, admin_players_keyboard, admin_server_keyboard,
     broadcast_confirm_keyboard, main_keyboard,
@@ -121,7 +121,11 @@ def _parse_plugins(raw: str) -> str:
 
 
 def _is_admin(message: Message) -> bool:
-    return message.from_user.id == ADMIN_ID
+    return is_admin(message.from_user.id)
+
+
+def _is_owner(message: Message) -> bool:
+    return is_owner(message.from_user.id)
 
 
 @router.message(F.text == "🎛 Админ-панель")
@@ -129,7 +133,7 @@ async def open_panel(message: Message, state: FSMContext) -> None:
     if not _is_admin(message):
         return
     await state.clear()
-    await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+    await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(_is_owner(message)), parse_mode="HTML")
 
 
 @router.message(F.text == "◀ Назад")
@@ -145,7 +149,7 @@ async def panel_to_main(message: Message, state: FSMContext) -> None:
     if not _is_admin(message):
         return
     await state.clear()
-    await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+    await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(_is_owner(message)), parse_mode="HTML")
 
 
 @router.message(F.text == "👥 Игроки")
@@ -153,7 +157,7 @@ async def panel_players_tab(message: Message, state: FSMContext) -> None:
     if not _is_admin(message):
         return
     await state.clear()
-    await message.answer("👥 <b>Игроки</b>", reply_markup=admin_players_keyboard(), parse_mode="HTML")
+    await message.answer("👥 <b>Игроки</b>", reply_markup=admin_players_keyboard(_is_owner(message)), parse_mode="HTML")
 
 
 @router.message(F.text == "🖥 Сервер")
@@ -166,7 +170,7 @@ async def panel_server_tab(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == "📢 Рассылка")
 async def panel_broadcast_start(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     await state.set_state(PanelStates.waiting_broadcast_text)
     await message.answer(
@@ -179,11 +183,11 @@ async def panel_broadcast_start(message: Message, state: FSMContext) -> None:
 
 @router.message(PanelStates.waiting_broadcast_text)
 async def panel_broadcast_text(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     if message.text and message.text.strip() == "/cancel":
         await state.clear()
-        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(True), parse_mode="HTML")
         return
     text = (message.text or "").strip()
     if not text:
@@ -200,7 +204,7 @@ async def panel_broadcast_text(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "broadcast_yes")
 async def panel_broadcast_confirm(callback, state: FSMContext, bot) -> None:
-    if callback.from_user.id != ADMIN_ID:
+    if not is_owner(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     data = await state.get_data()
@@ -218,19 +222,19 @@ async def panel_broadcast_confirm(callback, state: FSMContext, bot) -> None:
 
     await callback.message.answer(
         f"✅ Рассылка завершена.\nОтправлено: {sent}, не доставлено: {failed}",
-        reply_markup=admin_panel_keyboard(),
+        reply_markup=admin_panel_keyboard(True),
     )
     await callback.answer()
 
 
 @router.callback_query(F.data == "broadcast_no")
 async def panel_broadcast_cancel(callback, state: FSMContext) -> None:
-    if callback.from_user.id != ADMIN_ID:
+    if not is_owner(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer("Рассылка отменена.", reply_markup=admin_panel_keyboard())
+    await callback.message.answer("Рассылка отменена.", reply_markup=admin_panel_keyboard(True))
     await callback.answer()
 
 
@@ -248,7 +252,7 @@ async def panel_online(message: Message) -> None:
 
 @router.message(F.text == "📋 Вайтлист")
 async def panel_whitelist(message: Message) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     try:
         raw = await rcon("whitelist list")
@@ -371,7 +375,7 @@ async def panel_me_start(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == "➕ Добавить в вайтлист")
 async def panel_wl_add_start(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     await state.set_state(PanelStates.waiting_wl_add)
     await message.answer("➕ Введи ник игрока для добавления в вайтлист.\n\nОтправь /cancel для отмены.")
@@ -379,11 +383,11 @@ async def panel_wl_add_start(message: Message, state: FSMContext) -> None:
 
 @router.message(PanelStates.waiting_wl_add)
 async def panel_wl_add_send(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     if message.text and message.text.strip() == "/cancel":
         await state.clear()
-        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(True), parse_mode="HTML")
         return
     nick = (message.text or "").strip()
     if not re.match(r"^[a-zA-Z0-9_]{3,16}$", nick):
@@ -405,7 +409,7 @@ async def panel_wl_add_send(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == "➖ Убрать из вайтлиста")
 async def panel_wl_remove_start(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     await state.set_state(PanelStates.waiting_wl_remove)
     await message.answer("➖ Введи ник игрока для удаления из вайтлиста.\n\nОтправь /cancel для отмены.")
@@ -413,11 +417,11 @@ async def panel_wl_remove_start(message: Message, state: FSMContext) -> None:
 
 @router.message(PanelStates.waiting_wl_remove)
 async def panel_wl_remove_send(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message):
+    if not _is_owner(message):
         return
     if message.text and message.text.strip() == "/cancel":
         await state.clear()
-        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(True), parse_mode="HTML")
         return
     nick = (message.text or "").strip()
     if not re.match(r"^[a-zA-Z0-9_]{3,16}$", nick):
@@ -443,7 +447,7 @@ async def panel_me_send(message: Message, state: FSMContext) -> None:
         return
     if message.text and message.text.strip() == "/cancel":
         await state.clear()
-        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+        await message.answer(PANEL_TEXT, reply_markup=admin_panel_keyboard(_is_owner(message)), parse_mode="HTML")
         return
     text = (message.text or "").strip()
     if not text:

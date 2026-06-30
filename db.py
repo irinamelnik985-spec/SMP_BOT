@@ -22,6 +22,21 @@ def init() -> None:
                 edited_at REAL
             )"""
         )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                type TEXT NOT NULL,
+                offender TEXT,
+                text TEXT NOT NULL,
+                media_count INTEGER DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                admin_reply TEXT,
+                admin_replied_at TEXT
+            )"""
+        )
         try:
             conn.execute("ALTER TABLE reviews ADD COLUMN edited_at REAL")
         except Exception:
@@ -93,3 +108,32 @@ def update_review(review_id: int, rating: int, text: str, edited_at: float) -> N
             "UPDATE reviews SET rating = ?, text = ?, edited_at = ? WHERE id = ?",
             (rating, text, edited_at, review_id),
         )
+
+
+def add_ticket(user_id: int, username: str | None, ttype: str, offender: str | None, text: str, media_count: int = 0) -> int:
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.execute(
+            "INSERT INTO tickets (user_id, username, type, offender, text, media_count) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, username, ttype, offender, text, media_count),
+        )
+        return cur.lastrowid
+
+
+def set_ticket_status(user_id: int, status: str, reply: str | None = None) -> None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE tickets SET status = ?, "
+            "admin_reply = COALESCE(?, admin_reply), "
+            "admin_replied_at = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE admin_replied_at END "
+            "WHERE id = (SELECT id FROM tickets WHERE user_id = ? AND status = 'open' ORDER BY created_at DESC LIMIT 1)",
+            (status, reply, reply, user_id),
+        )
+
+
+def list_tickets(limit: int = 20) -> list[tuple]:
+    with sqlite3.connect(DB_PATH) as conn:
+        return list(conn.execute(
+            "SELECT id, user_id, username, type, offender, text, media_count, status, created_at, admin_reply "
+            "FROM tickets ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ))

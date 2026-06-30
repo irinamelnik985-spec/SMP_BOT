@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import db
-from config import ADMIN_ID, REVIEWS_GROUP_ID
+from config import ADMIN_ID, REVIEWS_GROUP_ID, is_admin
 from keyboards import (
     review_admin_keyboard,
     review_cancel_keyboard,
@@ -213,7 +213,7 @@ async def review_text_received(message: Message, state: FSMContext, bot: Bot) ->
 
 @router.callback_query(F.data.startswith("review_reply_"))
 async def review_reply_start(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.from_user.id != ADMIN_ID:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     review_id = int(callback.data.split("_")[2])
@@ -230,7 +230,7 @@ async def review_reply_start(callback: CallbackQuery, state: FSMContext) -> None
 
 @router.message(ReviewStates.waiting_admin_reply)
 async def review_reply_send(message: Message, state: FSMContext, bot: Bot) -> None:
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
     data = await state.get_data()
     review_id = data["review_id"]
@@ -305,8 +305,8 @@ def _format_review_page(rows: list, index: int, is_admin: bool) -> tuple[str, In
 @router.message(F.text == "📖 Отзывы")
 async def reviews_list_open(message: Message) -> None:
     rows = db.list_reviews(limit=10000)
-    is_admin = message.from_user.id == ADMIN_ID
-    body, kb = _format_review_page(rows, 0, is_admin)
+    admin_view = is_admin(message.from_user.id)
+    body, kb = _format_review_page(rows, 0, admin_view)
     await message.answer(body, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
@@ -326,8 +326,8 @@ async def reviews_nav(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     rows = db.list_reviews(limit=10000)
-    is_admin = callback.from_user.id == ADMIN_ID
-    body, kb = _format_review_page(rows, index, is_admin)
+    admin_view = is_admin(callback.from_user.id)
+    body, kb = _format_review_page(rows, index, admin_view)
     try:
         await callback.message.edit_text(body, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
     except Exception:
@@ -337,7 +337,7 @@ async def reviews_nav(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("reviewdel_"))
 async def reviews_delete(callback: CallbackQuery) -> None:
-    if callback.from_user.id != ADMIN_ID:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Только админ.", show_alert=True)
         return
     parts = callback.data.split("_")

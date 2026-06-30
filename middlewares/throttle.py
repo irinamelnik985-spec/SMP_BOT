@@ -16,7 +16,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import Update
 
-from config import ADMIN_ID
+from config import ADMIN_IDS
 
 # Параметры rate-limit
 WINDOW_SEC = 5.0       # окно в секундах
@@ -72,7 +72,7 @@ class ThrottleMiddleware(BaseMiddleware):
 
         if user is None:
             return await handler(event, data)
-        if user.id == ADMIN_ID:
+        if user.id in ADMIN_IDS:
             return await handler(event, data)
 
         if _hit(user.id):

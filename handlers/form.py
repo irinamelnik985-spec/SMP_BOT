@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 import storage
-from config import ADMIN_ID, RCON_HOST, RCON_PASS, RCON_PORT
+from config import ADMIN_IDS, RCON_HOST, RCON_PASS, RCON_PORT
 from keyboards import admin_keyboard, experience_keyboard, skip_keyboard
 from rcon import rcon as rcon_cmd
 from states import FormStates
@@ -196,5 +196,12 @@ async def _send_to_admin(bot: Bot, user, data: dict) -> None:
         f"🕐 {now}"
     )
 
-    await bot.send_message(ADMIN_ID, text, reply_markup=admin_keyboard(user.id))
-    logger.info("Заявка от пользователя %d отправлена администратору", user.id)
+    records: list[tuple[int, int]] = []
+    for admin_id in ADMIN_IDS:
+        try:
+            sent = await bot.send_message(admin_id, text, reply_markup=admin_keyboard(user.id))
+            records.append((admin_id, sent.message_id))
+        except Exception:
+            logger.warning("Не удалось отправить заявку админу %d", admin_id)
+    storage.app_admin_msgs[user.id] = records
+    logger.info("Заявка от пользователя %d отправлена админам", user.id)

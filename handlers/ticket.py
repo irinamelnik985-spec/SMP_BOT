@@ -4,10 +4,11 @@ import re
 from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InputMediaPhoto, Message
+from aiogram.types import CallbackQuery, InputMediaPhoto, InputMediaVideo, Message
 
+import db
 import storage
-from config import ADMIN_ID, RCON_HOST, RCON_PASS, RCON_PORT
+from config import ADMIN_IDS, RCON_HOST, RCON_PASS, RCON_PORT, is_admin
 from keyboards import (
     ticket_admin_keyboard,
     ticket_cancel_keyboard,
@@ -15,6 +16,7 @@ from keyboards import (
     ticket_photos_done_keyboard,
     ticket_type_keyboard,
 )
+from notify import close_admin_broadcast
 from rcon import rcon as rcon_cmd
 from states import TicketStates
 
@@ -101,8 +103,8 @@ async def process_complaint_text(message: Message, state: FSMContext) -> None:
     await state.update_data(complaint_text=text, complaint_photos=[])
     await state.set_state(TicketStates.waiting_complaint_photo)
     await message.answer(
-        "📸 Прикрепи скриншоты нарушения.\n"
-        "Максимум 6 фото, только фото — не файлы.\n"
+        "📸 Прикрепи доказательства — фото или видео.\n"
+        "Максимум 6 вложений, не файлом.\n"
         "Когда отправишь все — нажми кнопку «Отправить».\n\n"
         "<i>Напиши «Отмена» чтобы прервать.</i>",
         parse_mode="HTML",
@@ -112,13 +114,17 @@ async def process_complaint_text(message: Message, state: FSMContext) -> None:
 
 @router.message(TicketStates.waiting_complaint_photo)
 async def process_complaint_photo(message: Message, state: FSMContext, bot: Bot) -> None:
-    if not message.photo:
-        await message.answer("❌ Нужно именно фото, не файл и не текст.")
+    if message.photo:
+        item = ("photo", message.photo[-1].file_id)
+    elif message.video:
+        item = ("video", message.video.file_id)
+    else:
+        await message.answer("❌ Прикрепи фото или видео (не файлом).")
         return
 
     data = await state.get_data()
     photos: list = data.get("complaint_photos", [])
-    photos.append(message.photo[-1].file_id)
+    photos.append(item)
     await state.update_data(complaint_photos=photos)
 
     count = len(photos)
@@ -127,7 +133,7 @@ async def process_complaint_photo(message: Message, state: FSMContext, bot: Bot)
         return
 
     await message.answer(
-        f"✅ Скриншот {count}/6 принят. Отправь ещё или нажми «Отправить».",
+        f"✅ Вложение {count}/6 принято. Отправь ещё или нажми «Отправить».",
         reply_markup=ticket_photos_done_keyboard(count),
     )
 
@@ -153,6 +159,7 @@ async def _send_complaint(message: Message, state: FSMContext, bot: Bot, user=No
     username = f"@{user.username}" if user.username else f"id{user.id}"
 
     storage.pending_tickets[user.id] = {"type": "complaint", "offender": offender, "text": text}
+    db.add_ticket(user.id, username, "complaint", offender, text, len(photos))
 
     caption = (
         f"🚨 <b>Жалоба на игрока</b>\n\n"
@@ -161,25 +168,40 @@ async def _send_complaint(message: Message, state: FSMContext, bot: Bot, user=No
         f"📝 {text}"
     )
 
-    if len(photos) == 1:
-        await bot.send_photo(
-            ADMIN_ID,
-            photo=photos[0],
-            caption=caption,
-            parse_mode="HTML",
-            reply_markup=ticket_admin_keyboard(user.id, "complaint"),
-        )
-    else:
-        media = [InputMediaPhoto(media=photos[0], caption=caption, parse_mode="HTML")]
-        media += [InputMediaPhoto(media=fid) for fid in photos[1:]]
-        await bot.send_media_group(ADMIN_ID, media=media)
-        await bot.send_message(
-            ADMIN_ID,
-            f"👆 Жалоба выше ({len(photos)} скрина)",
-            reply_markup=ticket_admin_keyboard(user.id, "complaint"),
-        )
+    records: list[tuple[int, int]] = []
+    for admin_id in ADMIN_IDS:
+        try:
+            if len(photos) == 1:
+                kind, fid = photos[0]
+                if kind == "video":
+                    sent = await bot.send_video(
+                        admin_id, video=fid, caption=caption, parse_mode="HTML",
+                        reply_markup=ticket_admin_keyboard(user.id, "complaint"),
+                    )
+                else:
+                    sent = await bot.send_photo(
+                        admin_id, photo=fid, caption=caption, parse_mode="HTML",
+                        reply_markup=ticket_admin_keyboard(user.id, "complaint"),
+                    )
+            else:
+                media = []
+                for i, (kind, fid) in enumerate(photos):
+                    cap = caption if i == 0 else None
+                    pm = "HTML" if cap else None
+                    media.append(InputMediaVideo(media=fid, caption=cap, parse_mode=pm) if kind == "video"
+                                 else InputMediaPhoto(media=fid, caption=cap, parse_mode=pm))
+                await bot.send_media_group(admin_id, media=media)
+                sent = await bot.send_message(
+                    admin_id,
+                    f"👆 Жалоба выше ({len(photos)} вложений)",
+                    reply_markup=ticket_admin_keyboard(user.id, "complaint"),
+                )
+            records.append((admin_id, sent.message_id))
+        except Exception:
+            logger.warning("Не удалось отправить жалобу админу %d", admin_id)
+    storage.ticket_admin_msgs[user.id] = records
 
-    await bot.send_message(user.id, "✅ Жалоба со скриншотами отправлена администратору. Ожидай ответа.")
+    await bot.send_message(user.id, "✅ Жалоба с вложениями отправлена администратору. Ожидай ответа.")
     await state.clear()
     logger.info("Жалоба от %d на %s (%d фото)", user.id, offender, len(photos))
 
@@ -207,8 +229,8 @@ async def process_question_text(message: Message, state: FSMContext) -> None:
     await state.update_data(question_text=text, question_photos=[])
     await state.set_state(TicketStates.waiting_question_photo)
     await message.answer(
-        "📎 Хочешь прикрепить скриншоты? Это необязательно.\n"
-        "Максимум 6 фото, только фото — не файлы.\n"
+        "📎 Хочешь прикрепить фото или видео? Это необязательно.\n"
+        "Максимум 6 вложений, не файлом.\n"
         "Когда отправишь все — нажми «Отправить». Или пропусти.\n\n"
         "<i>Напиши «Отмена» чтобы прервать.</i>",
         parse_mode="HTML",
@@ -236,13 +258,17 @@ async def question_photos_done(callback: CallbackQuery, state: FSMContext, bot: 
 
 @router.message(TicketStates.waiting_question_photo)
 async def process_question_photo(message: Message, state: FSMContext, bot: Bot) -> None:
-    if not message.photo:
-        await message.answer("❌ Нужно фото, не файл. Или нажми «Пропустить».")
+    if message.photo:
+        item = ("photo", message.photo[-1].file_id)
+    elif message.video:
+        item = ("video", message.video.file_id)
+    else:
+        await message.answer("❌ Прикрепи фото или видео. Или нажми «Пропустить».")
         return
 
     data = await state.get_data()
     photos: list = data.get("question_photos", [])
-    photos.append(message.photo[-1].file_id)
+    photos.append(item)
     await state.update_data(question_photos=photos)
 
     count = len(photos)
@@ -251,7 +277,7 @@ async def process_question_photo(message: Message, state: FSMContext, bot: Bot) 
         return
 
     await message.answer(
-        f"✅ Скриншот {count}/6 принят. Отправь ещё или нажми «Отправить».",
+        f"✅ Вложение {count}/6 принято. Отправь ещё или нажми «Отправить».",
         reply_markup=ticket_photos_done_keyboard(count),
     )
 
@@ -262,6 +288,7 @@ async def _send_question(bot: Bot, state: FSMContext, user, photos: list) -> Non
     username = f"@{user.username}" if user.username else f"id{user.id}"
 
     storage.pending_tickets[user.id] = {"type": "question", "text": text}
+    db.add_ticket(user.id, username, "question", None, text, len(photos))
 
     msg_text = (
         f"❓ <b>Вопрос администратору</b>\n\n"
@@ -269,18 +296,34 @@ async def _send_question(bot: Bot, state: FSMContext, user, photos: list) -> Non
         f"📝 {text}"
     )
 
-    if not photos:
-        await bot.send_message(ADMIN_ID, msg_text, parse_mode="HTML",
-                               reply_markup=ticket_admin_keyboard(user.id, "question"))
-    elif len(photos) == 1:
-        await bot.send_photo(ADMIN_ID, photo=photos[0], caption=msg_text, parse_mode="HTML",
-                             reply_markup=ticket_admin_keyboard(user.id, "question"))
-    else:
-        media = [InputMediaPhoto(media=photos[0], caption=msg_text, parse_mode="HTML")]
-        media += [InputMediaPhoto(media=fid) for fid in photos[1:]]
-        await bot.send_media_group(ADMIN_ID, media=media)
-        await bot.send_message(ADMIN_ID, f"👆 Вопрос выше ({len(photos)} скрина)",
-                               reply_markup=ticket_admin_keyboard(user.id, "question"))
+    records: list[tuple[int, int]] = []
+    for admin_id in ADMIN_IDS:
+        try:
+            if not photos:
+                sent = await bot.send_message(admin_id, msg_text, parse_mode="HTML",
+                                              reply_markup=ticket_admin_keyboard(user.id, "question"))
+            elif len(photos) == 1:
+                kind, fid = photos[0]
+                if kind == "video":
+                    sent = await bot.send_video(admin_id, video=fid, caption=msg_text, parse_mode="HTML",
+                                                reply_markup=ticket_admin_keyboard(user.id, "question"))
+                else:
+                    sent = await bot.send_photo(admin_id, photo=fid, caption=msg_text, parse_mode="HTML",
+                                                reply_markup=ticket_admin_keyboard(user.id, "question"))
+            else:
+                media = []
+                for i, (kind, fid) in enumerate(photos):
+                    cap = msg_text if i == 0 else None
+                    pm = "HTML" if cap else None
+                    media.append(InputMediaVideo(media=fid, caption=cap, parse_mode=pm) if kind == "video"
+                                 else InputMediaPhoto(media=fid, caption=cap, parse_mode=pm))
+                await bot.send_media_group(admin_id, media=media)
+                sent = await bot.send_message(admin_id, f"👆 Вопрос выше ({len(photos)} вложений)",
+                                              reply_markup=ticket_admin_keyboard(user.id, "question"))
+            records.append((admin_id, sent.message_id))
+        except Exception:
+            logger.warning("Не удалось отправить вопрос админу %d", admin_id)
+    storage.ticket_admin_msgs[user.id] = records
 
     await bot.send_message(user.id, "✅ Вопрос отправлен администратору. Ожидай ответа.")
     await state.clear()
@@ -291,7 +334,7 @@ async def _send_question(bot: Bot, state: FSMContext, user, photos: list) -> Non
 
 @router.callback_query(F.data.startswith("ticket_decline_"))
 async def ticket_decline(callback: CallbackQuery, bot: Bot) -> None:
-    if callback.from_user.id != ADMIN_ID:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     user_id = int(callback.data.split("_")[2])
@@ -306,21 +349,28 @@ async def ticket_decline(callback: CallbackQuery, bot: Bot) -> None:
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(f"❌ Обращение пользователя {user_id} отклонено.")
     await callback.answer()
+    records = storage.ticket_admin_msgs.pop(user_id, [])
+    db.set_ticket_status(user_id, "declined")
+    await close_admin_broadcast(bot, records, callback.from_user, f"отклонил обращение от uid {user_id}")
 
 
 @router.callback_query(F.data.startswith("ticket_ack_"))
-async def ticket_ack(callback: CallbackQuery) -> None:
-    if callback.from_user.id != ADMIN_ID:
+async def ticket_ack(callback: CallbackQuery, bot: Bot) -> None:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
+    user_id = int(callback.data.split("_")[2])
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("✅ Обращение принято к сведению.")
     await callback.answer()
+    records = storage.ticket_admin_msgs.pop(user_id, [])
+    db.set_ticket_status(user_id, "ack")
+    await close_admin_broadcast(bot, records, callback.from_user, f"взялся за обращение (Принято) от uid {user_id}")
 
 
 @router.callback_query(F.data.startswith("ticket_reply_"))
-async def ticket_reply_start(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.from_user.id != ADMIN_ID:
+async def ticket_reply_start(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     user_id = int(callback.data.split("_")[2])
@@ -331,11 +381,14 @@ async def ticket_reply_start(callback: CallbackQuery, state: FSMContext) -> None
         f"✏️ Напиши ответ для пользователя <code>{user_id}</code>:", parse_mode="HTML"
     )
     await callback.answer()
+    # клейм: гасим кнопки у всех + оповещаем, что этот админ взялся отвечать
+    records = storage.ticket_admin_msgs.pop(user_id, [])
+    await close_admin_broadcast(bot, records, callback.from_user, f"взялся ответить на обращение uid {user_id}")
 
 
 @router.message(TicketStates.waiting_reply_text)
 async def ticket_reply_send(message: Message, state: FSMContext, bot: Bot) -> None:
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
     data = await state.get_data()
     user_id = data["reply_to"]
@@ -350,4 +403,6 @@ async def ticket_reply_send(message: Message, state: FSMContext, bot: Bot) -> No
     except Exception:
         await message.answer(f"❌ Не удалось отправить сообщение пользователю {user_id}.")
     await state.clear()
+    db.set_ticket_status(user_id, "replied", reply_text)
+    await close_admin_broadcast(bot, [], message.from_user, f"ответил на обращение uid {user_id}")
     logger.info("Администратор ответил пользователю %d", user_id)

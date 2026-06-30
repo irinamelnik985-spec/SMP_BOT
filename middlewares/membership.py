@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import Update
 
-from config import ADMIN_ID, REVIEWS_GROUP_ID
+from config import ADMIN_IDS, REVIEWS_GROUP_ID
 
 _CACHE: dict[int, tuple[bool, float]] = {}
 _CACHE_TTL = 30.0  # сек
@@ -74,8 +74,8 @@ class MembershipMiddleware(BaseMiddleware):
         if chat is not None and chat.type != "private":
             return await handler(event, data)
 
-        # Админ всегда пропускается
-        if user.id == ADMIN_ID:
+        # Админы всегда пропускаются
+        if user.id in ADMIN_IDS:
             return await handler(event, data)
 
         bot = data["bot"]
