@@ -24,10 +24,10 @@ async def on_new_member(event: ChatMemberUpdated, bot: Bot) -> None:
     mention = f'<a href="tg://user?id={user.id}">{name}</a>'
 
     text = (
-        f"👋 Привет, {mention}! Добро пожаловать в <b>Warden SMP</b>!\n\n"
-        f"🤖 Бот: @WSMP_white_bot\n"
-        f"🌐 IP: <code>wardensmp.fun</code>\n"
-        f"📦 Версия: <b>1.21 и новее</b>"
+        f"👋 <b>Привет, {mention}! Добро пожаловать в Warden SMP!</b>\n\n"
+        f"🤖 Подать заявку: @WSMP_white_bot\n"
+        f"🌐 IP: <code>wardensmp.fun:19445</code>\n"
+        f"📦 Версия: <b>Java Edition 1.20 и выше</b>"
     )
 
     try:

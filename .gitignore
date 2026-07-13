@@ -1,18 +1,17 @@
-# Secrets
+# секреты и окружение
 .env
+start_all.sh
 
-# Database
+# данные и логи
 *.db
+*.log
 
-# Python
+# бэкапы
+*.bak
+*.bak_*
+
+# python
 __pycache__/
-*.py[cod]
-*.pyo
+*.pyc
 .venv/
 venv/
-
-# Claude
-.claude/
-
-# Logs
-*.log

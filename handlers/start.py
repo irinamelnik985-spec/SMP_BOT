@@ -7,7 +7,7 @@ import db
 import storage
 from config import is_admin
 from handlers.rules import RULES_PAGES, TOTAL, WARNING_TEXT, _page_header
-from keyboards import confirm_restart_keyboard, main_keyboard, rules_keyboard, start_form_keyboard
+from keyboards import confirm_restart_keyboard, feedback_keyboard, main_keyboard, rules_keyboard, start_form_keyboard
 from states import RulesStates
 
 router = Router()
@@ -65,3 +65,20 @@ async def cancel_restart(callback: CallbackQuery) -> None:
         "Окей, заявка не изменена. Если передумаешь — нажми кнопку снова."
     )
     await callback.answer()
+
+
+@router.message(F.text == "💬 Обратная связь")
+async def open_feedback(message: Message) -> None:
+    await message.answer(
+        "Обратная связь — выбери, что нужно:",
+        reply_markup=feedback_keyboard(),
+    )
+
+
+@router.message(F.text == "◀ В меню")
+async def back_to_main(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(
+        "Главное меню:",
+        reply_markup=main_keyboard(is_admin=is_admin(message.from_user.id)),
+    )

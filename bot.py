@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import db
 import storage
 from config import BOT_TOKEN, PROXY_URL
-from handlers import admin, form, moderation, panel, review, rules, start, ticket, welcome
+from handlers import admin, form, moderation, panel, review, rules, start, suggest, ticket, welcome
 from monitor import monitoring_loop
 from middlewares.membership import MembershipMiddleware
 from middlewares.throttle import ThrottleMiddleware
@@ -42,6 +42,7 @@ async def main() -> None:
     dp.include_router(form.router)
     dp.include_router(ticket.router)
     dp.include_router(review.router)
+    dp.include_router(suggest.router)
     dp.include_router(admin.router)
     dp.include_router(moderation.router)
     dp.include_router(panel.router)

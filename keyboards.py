@@ -9,12 +9,44 @@ from aiogram.types import (
 def main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
     buttons = [
         [KeyboardButton(text="📋 Подать заявку на вайтлист")],
-        [KeyboardButton(text="📢 Жалоба / Вопрос")],
-        [KeyboardButton(text="⭐ Оставить отзыв"), KeyboardButton(text="📖 Отзывы")],
+        [KeyboardButton(text="📰 Предложить новость")],
+        [KeyboardButton(text="💬 Обратная связь")],
     ]
     if is_admin:
         buttons.append([KeyboardButton(text="🎛 Админ-панель")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def feedback_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📢 Жалоба / Вопрос")],
+            [KeyboardButton(text="⭐ Оставить отзыв"), KeyboardButton(text="📖 Отзывы")],
+            [KeyboardButton(text="◀ В меню")],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def suggest_collect_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Отправить", callback_data="suggest_send"),
+        InlineKeyboardButton(text="✖ Отмена", callback_data="suggest_cancel"),
+    ]])
+
+
+def suggest_cancel_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✖ Отмена", callback_data="suggest_cancel"),
+    ]])
+
+
+def suggest_admin_keyboard(uid: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Принять", callback_data=f"sug_accept_{uid}"),
+         InlineKeyboardButton(text="❌ Отклонить", callback_data=f"sug_reject_{uid}")],
+        [InlineKeyboardButton(text="💬 Ответить", callback_data=f"sug_reply_{uid}")],
+    ])
 
 
 def admin_panel_keyboard(is_owner: bool = False) -> ReplyKeyboardMarkup:

@@ -36,3 +36,8 @@ class ReviewStates(StatesGroup):
     waiting_rating = State()
     waiting_text = State()
     waiting_admin_reply = State()
+
+
+class SuggestStates(StatesGroup):
+    collecting = State()
+    waiting_reply = State()

@@ -18,7 +18,7 @@ _server_was_up: bool | None = None  # None = состояние ещё не оп
 CHECK_INTERVAL = 30  # секунд
 
 ALERT_CFG = {
-    "cpu_temp": {"fire": 80.0, "reset": 73.0, "label": "🌡 CPU перегрев", "unit": "°C"},
+    "cpu_temp": {"fire": 90.0, "reset": 83.0, "label": "🌡 CPU перегрев", "unit": "°C"},
     "cpu_load": {"fire": 90.0, "reset": 70.0, "label": "🖥 CPU загружен",  "unit": "%"},
     "ram":      {"fire": 90.0, "reset": 80.0, "label": "💾 RAM забита",   "unit": "%"},
     "disk":     {"fire": 90.0, "reset": 85.0, "label": "💿 Диск забит",   "unit": "%"},

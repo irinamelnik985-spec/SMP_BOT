@@ -6,7 +6,7 @@ import time
 from aiogram import Bot, F, Router
 from aiogram.types import ChatPermissions, Message
 
-from config import REVIEWS_GROUP_ID
+from config import ADMIN_ID, ADMIN_IDS, REVIEWS_GROUP_ID, is_admin, is_owner
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ UNIT_SEC = {
     "ч": 3600, "час": 3600, "часа": 3600, "часов": 3600, "h": 3600,
     "д": 86400, "дн": 86400, "день": 86400, "дня": 86400, "дней": 86400, "d": 86400,
     "нед": 604800, "недель": 604800, "неделя": 604800, "w": 604800,
+    "год": 31536000, "года": 31536000, "лет": 31536000, "y": 31536000,
 }
 MAX_SECONDS = 366 * 86400
 _DUR_RE = re.compile(r"^(\d+)\s*([a-zA-Zа-яА-Я]+)", re.UNICODE)
@@ -32,17 +33,26 @@ MUTE_ON = ChatPermissions(
 )
 
 
+def _human(sec):
+    for div, label in ((604800, "нед."), (86400, "дн."), (3600, "ч."), (60, "мин."), (1, "сек.")):
+        if sec >= div and sec % div == 0:
+            return f"{sec // div} {label}"
+    return f"{sec} сек."
+
+
 def _parse_duration(text):
+    # -> (seconds|None, human|None, reason, error|None)
     text = text.strip()
     m = _DUR_RE.match(text)
-    if not m:
-        return None, None, text
-    unit = m.group(2).lower()
-    if unit not in UNIT_SEC:
-        return None, None, text
-    seconds = int(m.group(1)) * UNIT_SEC[unit]
-    reason = text[m.end():].strip()
-    return seconds, f"{m.group(1)} {unit}", reason
+    if m:
+        unit = m.group(2).lower()
+        if unit not in UNIT_SEC:
+            return None, None, text, f"не понял срок «{html.escape(m.group(0))}»"
+        seconds = min(int(m.group(1)) * UNIT_SEC[unit], MAX_SECONDS)
+        return seconds, _human(seconds), text[m.end():].strip(), None
+    if re.match(r"^\d", text):
+        return None, None, text, "не понял срок"
+    return None, None, text, None
 
 
 def _m_user(user):
@@ -106,8 +116,8 @@ async def moderate(message: Message, bot: Bot) -> None:
     args = m.group(2)
     args_start = m.start(2)
 
-    if not await _is_chat_admin(bot, message.chat.id, message.from_user.id):
-        await message.reply("❌ Только админы группы могут модерировать.")
+    if not is_admin(message.from_user.id):
+        await message.reply("❌ Модерировать могут только админы сервера.")
         return
 
     target_id, disp, cleaned, reply = await _resolve(message, bot, args, args_start)
@@ -117,13 +127,24 @@ async def moderate(message: Message, bot: Bot) -> None:
     if target_id == bot.id:
         await message.reply("Это я, бот. Себя не трогаем.")
         return
-    if await _is_chat_admin(bot, message.chat.id, target_id):
-        await message.reply("⛔ Нельзя применить к админу группы.")
+    if target_id == ADMIN_ID:
+        await message.reply("👑 Владельца не трогаем.")
+        return
+    if target_id in ADMIN_IDS and not is_owner(message.from_user.id):
+        await message.reply("⛔ Админов может мутить/банить только владелец.")
         return
 
     chat_id = message.chat.id
     thread = message.message_thread_id
-    seconds, human, reason = _parse_duration((cleaned or "").strip())
+    seconds, human, reason, err = _parse_duration((cleaned or "").strip())
+    if err:
+        await message.reply(
+            f"⚠️ {err}.\n"
+            "Примеры срока: <code>10м</code> <code>2ч</code> <code>3д</code> <code>1нед</code>. "
+            "Или без срока — тогда навсегда.",
+            parse_mode="HTML",
+        )
+        return
     reason = reason or "не указана"
 
     async def say(text):
@@ -148,7 +169,7 @@ async def moderate(message: Message, bot: Bot) -> None:
 
         until = None
         srok = "навсегда"
-        if seconds and seconds <= MAX_SECONDS:
+        if seconds:
             until = int(time.time()) + max(seconds, 31)
             srok = human
 
@@ -177,7 +198,15 @@ async def moderate(message: Message, bot: Bot) -> None:
                     cmd, message.from_user.id, target_id, srok, reason)
     except Exception as e:
         logger.warning("Ошибка модерации %s: %s", cmd, e)
-        await message.reply(
-            f"⚠️ Не вышло: {html.escape(str(e))}\n"
-            "Проверь, что у бота есть права админа (бан/мут/удаление сообщений)."
-        )
+        es = str(e).lower()
+        if "administrator" in es or "not enough rights" in es or "chat_admin" in es:
+            await message.reply(
+                "⚠️ У этого юзера стоит звезда администратора в Telegram — "
+                "бота выше него нет, поэтому тронуть его невозможно.\n"
+                "Сними ему звезду админа в группе, тогда бот сможет мутить/банить."
+            )
+        else:
+            await message.reply(
+                f"⚠️ Не вышло: {html.escape(str(e))}\n"
+                "Проверь, что у бота есть права админа (бан/мут/удаление сообщений)."
+            )
